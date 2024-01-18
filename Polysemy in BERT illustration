@@ -1,0 +1,223 @@
+import torch
+from transformers import BertTokenizer, BertModel
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
+# Load pre-trained model tokenizer and model
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('bert-base-uncased', output_hidden_states=True)
+
+geo_sentences = ["She read the book in one sitting, unable to put it down.",
+#"Please book a table for two at the Italian restaurant.",
+#"The accountant will book your expenses into the system.",
+"He used a book to prop open the door.",
+#"Can you book me a flight to New York?",
+"The teacher asked him to open his book to page 50.",
+"She keeps a recipe book filled with family secrets.",
+"The play is based on a best-selling book.",
+"She gifted him a book on gardening.",
+"The library has a rare book collection.",
+"He wrote a book about his travels.",
+"She used the book to swat the fly.",
+"The film's plot didn't follow the book closely.",
+#"Please book the band for our wedding reception.",
+"They keep a book for visitors to sign.",
+#"The detective decided to book the suspect for questioning.",
+"His book on economics is quite challenging to read.",
+"They're discussing the book at the club next week.",
+"The artist used a book as a reference for the painting.",
+"He always carries a book of poems in his bag.",
+#"Can you book an appointment with the dentist?",
+"The hotel's guest book is filled with interesting comments.",
+"She found an old book in the attic.",
+"He uses a book to support his laptop.",
+"The magician's book of tricks amazed the children.",
+"The teacher’s grade book contains all the students' scores.",
+#"Please book a taxi to take us to the airport.",
+"The book cover was torn and tattered.",
+"He consulted the book before making the decision.",
+"The book of laws is essential for the court.",
+"The book spine was cracked from years of use.",
+"He finally finished writing his book on philosophy.",
+"The book club meets every other Thursday.",
+"She used the phone book to look up the number.",
+"The artist’s  book was filled with amazing drawings.",
+#"Please book a room at the hotel for our guests.",
+"He found an interesting book at the flea market.",
+"The book on ancient history was incredibly detailed.",
+"Her book of poetry won a literary award.",
+"The teacher's book was filled with notes.",
+"They published a book of local legends.",
+"He left his book on the bus.",
+#"Can you book tickets for the concert next week?",
+"The book binder restored the old manuscript.",
+#"I'll book your car in for a service on Friday.",
+"The coffee table book was about world architecture.",
+"She wrote a book about her adventures in Africa.",
+"The book illustrations were captivating.",
+"He always keeps a book on his nightstand.",
+"The library book was overdue.",
+"She had a cookery book.",
+"The book foreword was written by a famous author.",
+"She lost her place in the book.",
+"The binding of the book was beautifully crafted.",
+"He gifted her a book on her birthday.",
+#"The police decided to book him for speeding.",
+"She noted her favorite recipe in the book.",
+"The book was translated into several languages.",
+"He quoted a passage from the book during his speech.",
+"The book review was published in the newspaper.",
+"She has a book of old family photographs.",
+#"Please book a table at our usual restaurant.",
+"The antique book was worth a lot of money.",
+"The book covered the entire syllabus.",
+"He wrote a book on the history of jazz.",
+"The book was signed by the author.",
+#"Can you book a meeting room for tomorrow?",
+"The children's book was full of colorful pictures.",
+"She referenced the book in her thesis.",
+"He dropped the book in the bath.",
+"The first edition of the book is rare.",
+#"Please book a cab for 8 PM.",
+"The book detailed the artist's life work.",
+"She read the book in its original language.",
+"The book on quantum mechanics is quite complex.",
+"The book had a mysterious title.",
+"He keeps a book for recording his dreams.",
+#"She'll book the band for the party.",
+"The book was adapted into a movie.",
+"The book had a leather cover.",
+"He wrote his thoughts in a small book.",
+"The book was a guide to meditation.",
+"She has a book of her collected essays.",
+#"Can you book a health check-up for me?",
+"The book preface set the tone.",
+"The book was dog-eared and well-loved.",
+"The professor recommended a book for the course.",
+"He always carries a book of sudoku puzzles.",
+"She found the conclusion of the book unsatisfying.",
+"He used a book to level the table.",
+"The book about space captured his imagination.",
+#"Please book a flight to London.",
+"The index in the book was very detailed.",
+"She wrote a book on sustainable living.",
+"The book was a collection of short stories.",
+"He misplaced his book of contacts.",
+#"Can you book a table with a view?",
+"The book dedication was touching.",
+"She found a rare book at the book store.",
+"He uses the book for reference in his studies.",
+"The book glossary was helpful for understanding technical terms.",
+#"She will book a session with a personal trainer.",
+"The book was a compilation of famous speeches.",
+"He had a habit of underlining in his book.",
+"The book theme resonated with many readers.",
+"She wrote a book on urban gardening.",
+#"Can you book me on the next flight to Paris?",
+"The book narrative was engaging.",
+"He found a note inside the book.",
+"The book was about ancient Egyptian civilization.",
+#"Please book an eye exam for me.",
+"The book had a surprise ending.",
+"She always wrote her name in her book.",
+"The book sequel was eagerly anticipated.",
+"He bought the book at a discount.",
+"The book explored various philosophical theories.",
+#"Can you book a reservation for dinner?",
+"The font in the book was too small.",
+"She read the book to her children.",
+"The cover art on the book was striking.",
+"He wrote a book on digital marketing.",
+"The book was a biography of a famous scientist.",
+#"Please book a vet appointment for the dog.",
+"The book had a co-author.",
+"She donated the book to the library.",
+"The book appendix had additional resources.",
+"He read the book in a week.",
+"The book was about environmental conservation.",
+#"Can you book a room for the conference?",
+"The book epilogue provided closure to the story.",
+"She can read him like a book; she always knows when he's upset."]
+
+
+def get_embeddings(sentences, word):
+    token_embeddings = []
+    contextual_embeddings = []
+    sentence_indices = []  # List to keep track of sentence indices
+
+    for sentence_idx, sentence in enumerate(sentences):
+        # Add special tokens to the sentence and tokenize
+        inputs = tokenizer(sentence, return_tensors='pt', add_special_tokens=True)
+
+        # Get tokens and their indexes
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+
+        # Identify the indexes of tokens that represent the word
+        word_indexes = []
+        for i, token in enumerate(tokens):
+            # Check if the token is a part of the word
+            if token == word or (token.startswith('##') and tokens[i-1] == word):
+                word_indexes.append(i)
+
+        if word_indexes:
+            # Forward pass, get hidden states
+            with torch.no_grad():
+                outputs = model(**inputs)
+                hidden_states = outputs.hidden_states
+
+                # Extract the token embeddings
+                embeddings = model.embeddings.word_embeddings(inputs["input_ids"])
+                token_embedding = embeddings.squeeze(0)[word_indexes]
+                token_embeddings.append(token_embedding.mean(dim=0).numpy())
+
+                # Get final layer embeddings for the word
+                final_embedding = hidden_states[-1].squeeze(0)[word_indexes]
+                contextual_embeddings.append(final_embedding.mean(dim=0).numpy())
+
+                # Add the sentence index for each embedding
+                sentence_indices.append(sentence_idx)
+
+    return np.array(token_embeddings), np.array(contextual_embeddings), np.array(sentence_indices)
+
+
+# Get embeddings for each set of sentences
+initial_embeddings_geo, contextual_embeddings_geo, sentence_indices = get_embeddings(geo_sentences, "book")
+
+def plot_embeddings3d(initial_embeddings_geo, contextual_embeddings_geo, title):
+    # Combine and scale embeddings
+    combined_embeddings = np.vstack((initial_embeddings_geo, contextual_embeddings_geo))
+    scaler = StandardScaler()
+    scaled_embeddings = scaler.fit_transform(combined_embeddings)
+
+    # PCA transformation
+    pca = PCA(n_components=3)
+    reduced_embeddings = pca.fit_transform(scaled_embeddings)
+
+    # Split back into two sets
+    len_geo = len(initial_embeddings_geo)
+    reduced_initial_geo = reduced_embeddings[:len_geo]
+    reduced_contextual_geo = reduced_embeddings[len_geo:]
+
+    # Plotting
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(reduced_initial_geo[:,0], reduced_initial_geo[:,1], reduced_initial_geo[:,2], color='darkgreen', marker='x', label='Token Book')
+    ax.scatter(reduced_contextual_geo[:,0], reduced_contextual_geo[:,1], reduced_contextual_geo[:,2], color='limegreen', marker='^', label='Contextual Book')
+
+    ax.set_title(title, fontsize= "large")
+    plt.legend(fontsize="small")
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
+
+    # Saving the figure. Adjust the DPI for higher or lower resolution.
+    plt.savefig('geo_plot3d.png', dpi=500, bbox_inches='tight')
+
+    plt.show()
+
+
+plot_embeddings3d(initial_embeddings_geo, contextual_embeddings_geo, "Token and Contextualized embeddings for 'book'")
