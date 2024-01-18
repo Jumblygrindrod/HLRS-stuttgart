@@ -1,0 +1,61 @@
+!pip install transformers
+!pip install torch
+!pip install matplotlib
+!pip install scikit-learn
+
+from transformers import BertTokenizer, BertModel
+import torch
+import pandas as pd
+
+# Initialize the tokenizer and model (BERT-Base)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('bert-base-uncased', output_attentions=True)
+
+
+# Sentence to be processed
+sentence = "Gabi only listened to rock"
+
+
+
+def extract_attention_scores(sentence, layer, head, output_file='attention_matrix.csv'):
+    """
+    Extracts the attention scores from a specified layer and head of a BERT model for a given sentence.
+
+    Args:
+    sentence (str): The sentence to process.
+    layer (int): The layer number from which to extract attention scores.
+    head (int): The head number from which to extract attention scores.
+    output_file (str): The name of the output CSV file.
+
+    Returns:
+    None: The function saves the attention matrix as a CSV file.
+    """
+    # Initialize the tokenizer and model (BERT-Base)
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased', output_attentions=True)
+
+    # Tokenize the sentence and convert to tensor
+    inputs = tokenizer(sentence, return_tensors='pt')
+
+    # Forward pass, get model outputs
+    outputs = model(**inputs)
+
+    # Extract attentions
+    attentions = outputs.attentions  # Tuple of length 12 (one for each layer)
+
+    # Extract specific attention scores
+    selected_attention = attentions[layer][0, head]  # Shape: [seq_len, seq_len]
+    attention_matrix = selected_attention.detach().numpy()
+
+    # Token IDs back to tokens for reference
+    tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])
+
+    # Create a DataFrame with labeled rows and columns
+    attention_df = pd.DataFrame(attention_matrix, index=tokens, columns=tokens)
+
+    # Save the DataFrame as a CSV file
+    attention_df.to_csv(output_file)
+
+    print(f"Attention matrix saved as '{output_file}'")
+
+
